@@ -1,0 +1,24 @@
+---
+title: "text"
+author: "Project 1 Group 2"
+date: "2024-10-26"
+output: 
+  html_document
+---
+
+# Aims of the Analysis
+The primary aim of this analysis is to investigate the risk factors associated with hypertension using various demographic, health, and lifestyle variables. The analysis will explore how these factors relate to hypertension status and provide insights for potential interventions.
+
+# Description of the Data
+The data consists of multiple datasets related to individual health and lifestyle factors. The primary datasets include:
+
+* Blood pressure measurements and health indicators (AHSnpa11bp.csv)
+* Behavioral and lifestyle factors (AHSnpa11bb.csv)
+* Socioeconomic and household data (inp13bsp.csv, inp13bhh.csv)
+* Medical condition information (inp13bcn.csv)
+
+The datasets were merged to create a comprehensive dataset containing relevant variables such as age, gender, body mass index (BMI), smoking status, and dietary intake.
+
+# Library Imports
+
+# Data Imports

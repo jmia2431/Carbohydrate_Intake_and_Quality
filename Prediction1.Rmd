@@ -1,0 +1,416 @@
+---
+title: "new"
+author: "mia"
+date: "2024-10-14"
+output: 
+  html_document:
+    code_folding: hide
+    css: styles.css
+---
+
+# Library
+```{r library, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(here)
+library(readxl)
+library(janitor)
+library(GGally)
+library(car)
+library(broom)
+library(nortest)
+library(lmtest)
+library(corrplot)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(caTools)
+library(stringr)   
+library(knitr)
+library(factoextra)
+library(gt)
+library(naniar)
+library(ggcorrplot)
+library(caret)
+library(plotly)
+library(stargazer)
+library(broom)
+library(knitr)
+library(kableExtra)
+library(gridExtra)
+```
+
+# Data
+```{r data import}
+raw_bp <- read.csv(here("ZIPallFiles","AHSnpa11bp.csv"), header=TRUE)
+raw_bb <- read.csv(here("ZIPallFiles","AHSnpa11bb.csv"), header=TRUE)
+raw_bsp <- read.csv(here("ZIPallFiles","inp13bsp.csv"), header=TRUE)
+raw_bcn <- read.csv(here("ZIPallFiles","inp13bcn.csv"), header=TRUE)
+raw_bhh <- read.csv(here("ZIPallFiles","inp13bhh.csv"), header=TRUE)
+```
+
+# Rename and Created
+```{r rename+Identity}
+bp_bb <- inner_join(raw_bp, raw_bb, by = "ABSPID") %>%
+  rename(HypertensionStatus = HYPBC,
+         BodyMass = SABDYMS,
+         SocialStatus = SF2SA1QN,
+         PersonID = ABSPID,
+         Age = AGEC,
+         Gender = SEX,
+         BMI = BMISC,
+         Systolic = SYSTOL,
+         Diastolic = DIASTOL,
+         SmokeStatus = SMKSTAT,
+         AlcoholPercentage_Day1 = ALCPER1,
+         AlcoholPercentage_Day2 = ALCPER2,
+         Potassium_Day1 = POTAST1,
+         Potassium_Day2 = POTAST2,
+         Sodium_Day1 = SODIUMT1,
+         Sodium_Day2 = SODIUMT2,
+         FiberEnergy_Day1 = FIBRPER1,
+         FiberEnergy_Day2 = FIBRPER2,
+         CarbonhydrateEnergy_Day1 = CHOPER1,
+         CarbonhydrateEnergy_Day2 = CHOPER2,
+         EnergyBMR_Day1 = EIBMR1,
+         EnergyBMR_Day2 = EIBMR2) %>%
+   mutate(Identity = factor(0))
+
+bsp_bhh<- left_join(raw_bsp, raw_bhh,by = c("ABSHID")) %>%
+  rename(BodyMass = SABDYMS,
+         SocialStatus = SF2SA1DB,
+         HouseID = ABSHID,
+         Age = AGEEC,
+         Gender = SEX,
+         BMI = BMISC,
+         Systolic = SYSTOL,
+         Diastolic = DIASTOL,
+         SmokeStatus = SMKSTAT,
+         AlcoholPercentage_Day1 = ALCPER1,
+         AlcoholPercentage_Day2 = ALCPER2,
+         Potassium_Day1 = POTAST1,
+         Potassium_Day2 = POTAST2,
+         Sodium_Day1 = SODIUMT1,
+         Sodium_Day2 = SODIUMT2,
+         FiberEnergy_Day1 = FIBRPER1,
+         FiberEnergy_Day2 = FIBRPER2,
+         CarbonhydrateEnergy_Day1 = CHOPER1,
+         CarbonhydrateEnergy_Day2 = CHOPER2,
+         EnergyBMR_Day1 = EIBMR1,
+         EnergyBMR_Day2 = EIBMR2)%>%
+   mutate(Identity = factor(1))
+
+bcn <- raw_bcn %>%
+  rename(HouseID = ABSHID,
+         MedicalCondition = ICD10ME)
+```
+
+# First Filter
+```{r filter 1}
+bp_bb <- bp_bb %>%
+  mutate(EnergyBMR_Day1 = na_if(EnergyBMR_Day1, 997) %>% na_if(998),
+         EnergyBMR_Day2 = na_if(EnergyBMR_Day2, 997) %>% na_if(998),
+         EnergyBMR = (EnergyBMR_Day1 + EnergyBMR_Day2)/2) %>%
+  filter(
+    Age >= 18, 
+    HypertensionStatus == 5,
+    BodyMass != 4,
+    (is.na(EnergyBMR) | EnergyBMR >= 0.9))
+
+bsp_bhh <- bsp_bhh %>% 
+  mutate(EnergyBMR_Day1 = na_if(EnergyBMR_Day1, 997) %>% na_if(998),
+         EnergyBMR_Day2 = na_if(EnergyBMR_Day2, 997) %>% na_if(998),
+         EnergyBMR = (EnergyBMR_Day1 + EnergyBMR_Day2)/2) %>%
+  filter(
+    Age >= 18, 
+    BodyMass != 4,
+    !HouseID %in% bcn$HouseID[bcn$MedicalCondition %in% c(7, 20)],
+    (is.na(EnergyBMR) | EnergyBMR >= 0.9))
+```
+
+# Merge
+```{r merge}
+raw_data <- bind_rows(bp_bb,bsp_bhh)
+```
+# Variable Selection
+```{r variable selection}
+selected_data <- raw_data %>%
+select(
+    PersonID, HouseID, SocialStatus, Age, Gender, BMI, Systolic, Diastolic, SmokeStatus, Identity,
+    AlcoholPercentage_Day1, AlcoholPercentage_Day2,
+    Potassium_Day1, Potassium_Day2, 
+    Sodium_Day1, Sodium_Day2,
+    FiberEnergy_Day1, FiberEnergy_Day2, 
+    CarbonhydrateEnergy_Day1, CarbonhydrateEnergy_Day2
+  )
+```
+
+# Na values + New Variables + Type Conversion
+```{r navalue_new_typeconversion}
+selected_data <- selected_data %>%
+  mutate(
+    across(c(Gender, SocialStatus, SmokeStatus), as.factor),
+    BMI = na_if(BMI, 98) %>% na_if(99),
+    Systolic = na_if(Systolic, 0) %>% na_if(998) %>% na_if(999),
+    Diastolic = na_if(Diastolic, 0) %>% na_if(998) %>% na_if(999),
+    Potassium = (Potassium_Day1 + Potassium_Day2) / 2, 
+    Sodium = (Sodium_Day1 + Sodium_Day2) / 2,
+    FiberEnergy = (FiberEnergy_Day1 + FiberEnergy_Day2)/2,
+    CarbonhydrateEnergy = (CarbonhydrateEnergy_Day1 + CarbonhydrateEnergy_Day2) / 2,
+    AlcoholPercentage = (AlcoholPercentage_Day1 + AlcoholPercentage_Day2) /2,
+    PotassiumSodiumRatio = Sodium / Potassium
+    ) %>% 
+  select(PersonID,HouseID, SocialStatus, Age, Gender, BMI, Systolic, Diastolic, SmokeStatus, AlcoholPercentage, PotassiumSodiumRatio, FiberEnergy, CarbonhydrateEnergy, Identity)
+```
+
+# Merge Variable
+```{r merge variable}
+selected_data <- selected_data %>% 
+  mutate(SmokeStatus = recode_factor(SmokeStatus, "2" = "1", "3" = "1","4" = "2","5" = "3"))
+```
+
+# Outliers and New Variables
+```{r variable creation and outliers}
+normal_ranges <- list(Systolic = c(90, 180),
+                      Diastolic = c(60, 120),
+                      BMI = c(16, 47.5), 
+                      PotassiumSodiumRatio = c(0, 4), 
+                      AlcoholPercentage = c(0, 85), 
+                      CarbonhydrateEnergy = c(0, 100), 
+                      FiberEnergy = c(0, 100))
+
+selected_data <- selected_data %>%
+  filter(
+    (is.na(Systolic) | (Systolic >= normal_ranges$Systolic[1] & Systolic <= normal_ranges$Systolic[2])),
+    (is.na(Diastolic) | (Diastolic >= normal_ranges$Diastolic[1] & Diastolic <= normal_ranges$Diastolic[2])),
+    (is.na(BMI) | (BMI >= normal_ranges$BMI[1] & BMI <= normal_ranges$BMI[2])),
+    (is.na(AlcoholPercentage) | (AlcoholPercentage >= normal_ranges$AlcoholPercentage[1] & AlcoholPercentage <= normal_ranges$AlcoholPercentage[2])),
+    (is.na(CarbonhydrateEnergy) | (CarbonhydrateEnergy >= normal_ranges$CarbonhydrateEnergy[1] & CarbonhydrateEnergy <= normal_ranges$CarbonhydrateEnergy[2])),
+    (is.na(FiberEnergy) | (FiberEnergy >= normal_ranges$FiberEnergy[1] & FiberEnergy <= normal_ranges$FiberEnergy[2])),
+    (is.na(PotassiumSodiumRatio) | (PotassiumSodiumRatio >= normal_ranges$PotassiumSodiumRatio[1] & PotassiumSodiumRatio <= normal_ranges$PotassiumSodiumRatio[2]))
+  ) %>%
+  mutate(
+    Hypertension = as.factor(case_when(
+      Systolic >= 120 | Diastolic >= 80 ~ 1,
+      TRUE ~ 0
+    ))
+  )
+ # select(-Sodium, -Potassium)
+```
+
+# Missing Values
+```{r missing value, warning = FALSE}
+selected_data %>% 
+  select(-PersonID, -HouseID) %>% 
+  miss_var_summary() %>% 
+  gt() %>%
+  tab_header(title = "Missing Value") %>%
+  tab_caption(caption = md("Table 4: Missing Values in Selected Data")) %>%
+  cols_label(variable = "Variable Name", n_miss = "Missing Count", pct_miss = "Percentage Missing") %>%
+  fmt_number(columns = everything(), decimals = 2)
+```
+
+# Regression Imputation
+```{r regression imputation, fig.height = 5, fig.width= 11}
+selected_data$BMI[is.na(selected_data$BMI)] <- lm(BMI ~ Gender + SocialStatus + Age + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy + AlcoholPercentage + SmokeStatus + Identity, data = selected_data, na.action = na.exclude) %>% 
+  predict(newdata = selected_data[is.na(selected_data$BMI), ])
+
+selected_data$Systolic[is.na(selected_data$Systolic)] <- lm(Systolic ~ Gender + SocialStatus + Age + BMI + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy + AlcoholPercentage + SmokeStatus + Identity, data = selected_data, na.action = na.exclude) %>% 
+  predict(newdata = selected_data[is.na(selected_data$Systolic), ])
+
+selected_data$Diastolic[is.na(selected_data$Diastolic)] <- lm(Diastolic ~ Gender + SocialStatus + Age + BMI + Systolic + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy + AlcoholPercentage + SmokeStatus + Identity, data = selected_data, na.action = na.exclude) %>%
+  predict(newdata = selected_data[is.na(selected_data$Diastolic), ])
+
+vis_miss(selected_data %>% 
+           select(-PersonID, -HouseID))
+```
+
+# Normalization
+```{r normalization}
+#numeric_cols <- sapply(selected_data, is.numeric)  
+#normalized_data <- selected_data
+#normalized_data[numeric_cols] <- scale(selected_data[numeric_cols])
+
+
+
+numeric_data <- selected_data %>% select_if(is.numeric)
+
+preprocess_params <- preProcess(numeric_data, method = c("center", "scale"))
+
+scaled_numeric_data <- predict(preprocess_params, numeric_data)
+
+normalized_data <- bind_cols(scaled_numeric_data, selected_data %>% select_if(Negate(is.numeric)))
+```
+
+# Multicollinearity Test
+```{r Multicollinearity Test}
+# Correlation matrix to check the correlation between predictors and response variables
+cor_matrix <- cor(selected_data[, c("Systolic", "Diastolic", "Age", "BMI", "AlcoholPercentage", "PotassiumSodiumRatio", "FiberEnergy", "CarbonhydrateEnergy")])
+
+# Visualize the correlation matrix
+corrplot(cor_matrix, method = "circle", type = "upper")
+
+# Check for multicollinearity using Variance Inflation Factor (VIF)
+systolic_model_test <- lm(Systolic ~ Age + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, data = selected_data)
+diastolic_model_test <- lm(Diastolic ~ Age + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, data = selected_data)
+
+# Check VIF
+vif(systolic_model_test)
+vif(diastolic_model_test)
+```
+
+# Train and Test Dataset
+```{r trai test dataset}
+set.seed(123)
+
+# Split data: 70% training, 30% testing
+split <- sample.split(selected_data$Systolic, SplitRatio = 0.7)
+
+# Create training and testing datasets
+train_data <- subset(selected_data, split == TRUE)
+test_data <- subset(selected_data, split == FALSE)
+```
+
+# Homoscedasticity
+```{r Homoscedasticity}
+# Fit the model for systolic blood pressure
+model_systolic <- lm(Systolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, data = train_data)
+
+# Residual vs Fitted plot for systolic
+plot(model_systolic, which = 1)
+
+# Breusch-Pagan test for homoscedasticity on systolic
+bptest(model_systolic) %>% 
+  broom::tidy() %>% 
+  knitr::kable(caption = "Breusch-Pagan Test for Homoscedasticity (Systolic BP)")
+
+# Fit the model for diastolic blood pressure
+model_diastolic <- lm(Diastolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, data = train_data)
+
+# Residual vs Fitted plot for diastolic
+plot(model_diastolic, which = 1)
+
+# Breusch-Pagan test for homoscedasticity on diastolic
+bptest(model_diastolic) %>% 
+  broom::tidy() %>% 
+  knitr::kable(caption = "Breusch-Pagan Test for Homoscedasticity (Diastolic BP)")
+```
+Check if Homoscedasticity is maintained (Breusch-Pagan test p-value > 0.05).
+
+# Robust Regression
+```{r robust regression}
+# Train model for systolic blood pressure using WLS
+weights_systolic <- 1 / lm(abs(residuals(lm(Systolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                                data = train_data))) ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                                data = train_data)$fitted.values^2
+
+wls_systolic_model <- lm(Systolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                         data = train_data, weights = weights_systolic)
+
+# Train model for diastolic blood pressure using WLS
+weights_diastolic <- 1 / lm(abs(residuals(lm(Diastolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                                data = train_data))) ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                                data = train_data)$fitted.values^2
+wls_diastolic_model <- lm(Diastolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                          data = train_data, weights = weights_diastolic)
+
+# Check the model summaries to inspect results
+summary(wls_systolic_model)
+summary(wls_diastolic_model)
+```
+
+# Prediction
+```{r prediction}
+# Predict systolic blood pressure for the test data
+test_data$predicted_systolic <- predict(wls_systolic_model, newdata = test_data)
+
+# Predict diastolic blood pressure for the test data
+test_data$predicted_diastolic <- predict(wls_diastolic_model, newdata = test_data)
+```
+
+```{r prediction plot, fig.width= 10}
+# Scatter plot of Actual vs Predicted values for systolic blood pressure
+systolic_plot <- ggplot(test_data, aes(x = Systolic, y = predicted_systolic)) +
+  geom_point(color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +  # 45-degree line
+  labs(
+    title = "Actual vs Predicted Systolic Blood Pressure",
+    x = "Actual Systolic BP",
+    y = "Predicted Systolic BP"
+  ) +
+  theme_minimal()
+
+# Scatter plot of Actual vs Predicted values for diastolic blood pressure
+diastolic_plot <- ggplot(test_data, aes(x = Diastolic, y = predicted_diastolic)) +
+  geom_point(color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +  # 45-degree line
+  labs(
+    title = "Actual vs Predicted Diastolic Blood Pressure",
+    x = "Actual Diastolic BP",
+    y = "Predicted Diastolic BP"
+  ) +
+  theme_minimal()
+
+# Arrange plots side by side
+grid.arrange(systolic_plot, diastolic_plot, ncol = 2)
+```
+
+# Log transformation
+```{r}
+# Apply log transformation to the response variables
+train_data <- train_data %>%
+  mutate(log_Systolic = log(Systolic),
+         log_Diastolic = log(Diastolic))
+
+# Train model for log-transformed systolic blood pressure
+log_systolic_model <- lm(log_Systolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                         data = train_data)
+
+# Train model for log-transformed diastolic blood pressure
+log_diastolic_model <- lm(log_Diastolic ~ Age + Gender + BMI + AlcoholPercentage + PotassiumSodiumRatio + FiberEnergy + CarbonhydrateEnergy, 
+                          data = train_data)
+
+# Check the model summaries to inspect results
+summary(log_systolic_model)
+summary(log_diastolic_model)
+```
+
+```{r, fig.width=10}
+test_data <- test_data %>%
+  mutate(log_Systolic = log(Systolic),
+         log_Diastolic = log(Diastolic))
+
+# Predict systolic blood pressure for the test data
+test_data$predicted_log_systolic <- predict(log_systolic_model, newdata = test_data)
+# Convert predicted values back to the original scale
+test_data$predicted_systolic <- exp(test_data$predicted_log_systolic)
+
+# Predict diastolic blood pressure for the test data
+test_data$predicted_log_diastolic <- predict(log_diastolic_model, newdata = test_data)
+# Convert predicted values back to the original scale
+test_data$predicted_diastolic <- exp(test_data$predicted_log_diastolic)
+
+# Scatter plot of Actual vs Predicted values for systolic blood pressure
+systolic_plot <- ggplot(test_data, aes(x = Systolic, y = predicted_systolic)) +
+  geom_point(color = "darkgreen") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +  # 45-degree line
+  labs(
+    title = "Actual vs Predicted Systolic Blood Pressure",
+    x = "Actual Systolic BP",
+    y = "Predicted Systolic BP"
+  ) +
+  theme_minimal()
+
+# Scatter plot of Actual vs Predicted values for diastolic blood pressure
+diastolic_plot <- ggplot(test_data, aes(x = Diastolic, y = predicted_diastolic)) +
+  geom_point(color = "darkgreen") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +  # 45-degree line
+  labs(
+    title = "Actual vs Predicted Diastolic Blood Pressure",
+    x = "Actual Diastolic BP",
+    y = "Predicted Diastolic BP"
+  ) +
+  theme_minimal()
+
+# Arrange the two plots side by side
+grid.arrange(systolic_plot, diastolic_plot, ncol = 2)
+```

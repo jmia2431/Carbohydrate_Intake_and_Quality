@@ -1,0 +1,86 @@
+---
+title: "Untitled"
+author: "mia"
+date: "2024-09-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)      
+library(readxl)    
+library(janitor)   
+library(stringr)   
+library(tidyr)     
+library(dplyr)
+library(knitr)
+```
+# Variable Selection
+```{r, message=FALSE}
+raw_bp <- read.csv(here("ZIPallFiles","AHSnpa11bp.csv"), header=TRUE)
+raw_bb <- read.csv(here("ZIPallFiles","AHSnpa11bb.csv"), header=TRUE)
+
+bp_bb <- inner_join(raw_bp, raw_bb, by = "ABSPID")
+
+X_all_File_variables <- read_excel("ZIPallFiles/_all.File.variables.xlsx", 
+    sheet = "Variables", col_names = FALSE)
+
+X_all_File_variables <- X_all_File_variables %>%
+  rename(
+    Survey = `...1`,
+    Name = `...2`,
+    VariableNames = `...3`,
+    Description = `...4`
+  ) %>%
+  filter(Name %in% c("AHSnpa11bp", "AHSnpa11ba"))
+```
+## Variables selection
+```{r}
+bb_bp_filtered <- bp_bb %>% 
+  # Select variables of interest
+  select(
+    ABSPID, HYPBC, SYSTOL, DIASTOL, 
+    AGEC, SEX, BMISC,
+    EXREGUIC, EXREGUID,
+    ENERGYT1, ENERGYF1, ENERGYT2, ENERGYF2, 
+    ENRGYT1, ENRGYF1, ENRGYT2, ENRGYF2, 
+    FIBRET1, FIBREF1, 
+    FIBRET2, FIBREF2
+  ) %>% 
+  # Convert specific columns to factor
+  mutate(
+    SEX = as.factor(SEX),
+    HYPBC = as.factor(HYPBC),
+    EXREGUIC = as.factor(EXREGUIC),
+    EXREGUID = as.factor(EXREGUID)
+  ) %>% 
+  # Set certain values as NA, based on column-specific conditions
+  mutate(across(where(is.numeric), ~ case_when(
+    . %in% c(9996, 9999) ~ NA_real_,
+    . %in% c(99.00, 98.00) & cur_column() == "BMISC" ~ NA_real_,
+    . %in% c(999, 998, 0) & cur_column() %in% c("SYSTOL", "DIASTOL") ~ NA_real_
+  ))) %>%
+  mutate(Hypertension = as.factor(case_when(
+    SYSTOL >= 140 | DIASTOL >= 90 ~ 1, # and or condition
+    TRUE ~ 0
+  ))) %>%
+  mutate(BP_Category = as.factor(case_when(
+    SYSTOL < 120 & DIASTOL < 80 ~ 0,       # Normal BP
+    SYSTOL >= 120 & SYSTOL <= 129 & DIASTOL < 80 ~ 1,  # Elevated BP
+    TRUE ~ 2                               # Other cases
+  ))) # %>%
+  # Remove rows with NA values
+  # drop_na() %>% 
+  # Filter out specific values for HYPBC and EXREGUID
+  #filter(
+   # !HYPBC %in% c(1, 2, 3),   # Remove rows where HYPBC equals 1, 2, or 3
+  #  !EXREGUID %in% c(0, 9),     # Remove rows where EXREGUID equals 0 or 9
+  #  !EXREGUIC %in% c(0, 9)
+  #)
+
+summary(bb_bp_filtered)
+```
+```{r}
+new <- bb_bp_filtered
+save(new, file = "NewVariables.RData")
+```

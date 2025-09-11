@@ -1,0 +1,85 @@
+---
+title: "SimpleAnalysis"
+author: "mia"
+date: "2024-08-31"
+output: 
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+load("ResponseVariables_Cleaned.RData")
+```
+
+
+```{r}
+factor_vars <- names(data)[sapply(data, is.factor)]
+
+proportion_tables <- list()
+
+# Calculate proportions for each factor variable
+for (var in factor_vars) {
+  proportion_table <- data %>%
+    group_by(across(all_of(var))) %>%
+    summarise(Count = n(), .groups = 'drop') %>%
+    mutate(Proportion = Count / sum(Count)) %>%
+    rename(Level = all_of(var))
+  
+  proportion_table <- proportion_table %>%
+    mutate(Variable = var)
+  
+  proportion_tables[[var]] <- proportion_table
+}
+
+# Combine all the proportion tables into one data frame
+proportion_df <- bind_rows(proportion_tables)
+
+# Print or view the proportion table
+proportion_df %>%
+  kable(format = "html", caption = "Proportion Table of Factor Variables") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+```{r fig.height=10,fig.width=9}
+proportion_df$Count <- as.numeric(proportion_df$Count)
+
+# Create bar plot
+ggplot(proportion_df, aes(x = Level, y = Count, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Variable, scales = "free_x") +
+  labs(title = "Bar Plot of Counts by Factor Variable",
+       x = "Level",
+       y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+proportion_df$Count <- as.numeric(proportion_df$Count)
+
+proportion_df <- proportion_df %>%
+  filter(!is.na(Level))
+
+# Create bar plot with each facet having its own x and y axis
+ggplot(proportion_df, aes(x = Level, y = Count, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Variable, scales = "free") +  # 'free' scales for both x and y axes
+  labs(title = "Bar Plot of Counts by Factor Variable",
+       x = "Level",
+       y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none")  # Hide the legend
+```

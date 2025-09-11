@@ -1,0 +1,68 @@
+---
+title: "Type check"
+author: "mia"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)      
+library(readxl)    
+library(janitor)   
+library(stringr)   
+library(tidyr)     
+library(dplyr)
+library(kableExtra)
+library(knitr)
+```
+
+```{r}
+# Step 1: Read in the raw datasets
+raw_bp <- read.csv(here("ZIPallFiles", "AHSnpa11bp.csv"), header=TRUE)
+raw_bb <- read.csv(here("ZIPallFiles", "AHSnpa11bb.csv"), header=TRUE)
+
+# Step 2: Read in the variable descriptions
+X_all_File_variables <- read_excel("ZIPallFiles/_all.File.variables.xlsx", 
+                                   sheet = "Variables", col_names = FALSE) %>%
+  rename(
+    Survey = `...1`,
+    Name = `...2`,
+    VariableNames = `...3`,
+    Description = `...4`
+  ) %>%
+  filter(Name %in% c("AHSnpa11bp", "AHSnpa11ba"))
+
+# Step 3: Combine datasets by "ABSPID"
+bp_bb <- full_join(raw_bp, raw_bb, by = "ABSPID")
+
+# Step 4: Convert ABSPID to character and handle unique counts
+bp_bb$ABSPID <- as.character(bp_bb$ABSPID)
+
+unique_counts <- sapply(bp_bb, function(x) length(unique(x)))
+
+# Step 5: Identify continuous and factor variables based on unique counts
+continuous_vars <- names(unique_counts[unique_counts > 17 & unique_counts < 1000])
+factor_vars <- names(unique_counts[unique_counts <= 17])
+
+# Step 6: Type conversion: continuous variables to integer, factor variables to factor
+bp_bb[continuous_vars] <- lapply(bp_bb[continuous_vars], as.integer)
+bp_bb[factor_vars] <- lapply(bp_bb[factor_vars], as.factor)
+
+# Step 7: Identify numerical variables (after type changes)
+numerical_vars <- bp_bb %>%
+  select(where(is.numeric)) %>%
+  names()
+```
+
+```{r}
+# Step 8: Filter variable descriptions for numerical variables
+numerical_vars_df <- X_all_File_variables %>%
+  filter(VariableNames %in% numerical_vars) %>%
+  filter(!grepl("(\\d+|1N|2N)$", VariableNames))
+
+# Step 9: Display kept numerical variables and their descriptions
+numerical_vars_df %>%
+  kable(caption = "Kept Numerical Variables and Their Descriptions") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```

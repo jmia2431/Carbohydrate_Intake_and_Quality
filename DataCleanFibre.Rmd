@@ -1,0 +1,149 @@
+---
+title: "DataCleanFibre"
+author: "mia"
+date: "2024-09-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)      
+library(readxl)    
+library(janitor)   
+library(stringr)   
+library(tidyr)     
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(factoextra)
+```
+
+```{r}
+raw_bp <- read.csv(here("ZIPallFiles","AHSnpa11bp.csv"), header=TRUE)
+raw_bb <- read.csv(here("ZIPallFiles","AHSnpa11bb.csv"), header=TRUE)
+bp_bb <- inner_join(raw_bp, raw_bb, by = "ABSPID")
+
+raw_bsp <- read.csv(here("ZIPallFiles","inp13bsp.csv"), header=TRUE)
+raw_bcn <- read.csv(here("ZIPallFiles","inp13bcn.csv"), header=TRUE)
+raw_bhh <- read.csv(here("ZIPallFiles","inp13bhh.csv"), header=TRUE)
+
+merged_data1 <- merge(raw_bsp, raw_bcn, by = c("ABSGID","ABSHID"))
+merged_data2<- merge(merged_data1, raw_bhh,by = c("ABSHID"))
+bsp_bcn_bhh <- merged_data2 %>%
+  rename(ABSPID = ABSHID,AGEC =AGEEC)
+```
+
+```{r}
+Data1 <- bp_bb %>%
+  select(
+    ABSPID, HYPBC, SABDYMS, SF2SA1QN, AGEC, SEX, BMISC, SYSTOL, DIASTOL,
+    POTAST1, POTAST2, 
+    SODIUMT1, SODIUMT2,
+    ENERGYT1, ENERGYT2, 
+    ENRGYT1, ENRGYT2, 
+    FIBRET1, FIBRET2, 
+    FIBRPER1, FIBRPER2, 
+    CHOPER1, CHOPER2,
+    CHOWSAT1, CHOWSAT2,
+    CHOWOAT1, CHOWOAT2
+  ) %>%
+  rename(SOCIAL = SF2SA1QN) %>%
+  mutate(
+    HYPBC = as.factor(HYPBC),
+    SEX = as.factor(SEX),
+    SOCIAL = as.factor(SOCIAL),
+    BMISC = na_if(na_if(BMISC, 99), 98),
+    SYSTOL = na_if(na_if(na_if(SYSTOL,0),998),999),
+    DIASTOL = na_if(na_if(na_if(DIASTOL,0),998),999),
+    POTAST = (POTAST1 + POTAST2) / 2, 
+    SODIUMT = (SODIUMT1 + SODIUMT2) / 2,
+    ENERGYT = (ENERGYT1 + ENERGYT2) / 2,
+    ENRGYT = (ENRGYT1 + ENRGYT2) / 2,
+    FIBRET = (FIBRET1 + FIBRET2) / 2,
+    FIBRPER = (FIBRPER1 + FIBRPER2)/2,
+    CHOPER = (CHOPER1 + CHOPER2) / 2
+    ) %>%
+  mutate(
+    FIBRETP = (ENERGYT - ENRGYT) / ENERGYT * 100,
+    Hypertension = as.factor(case_when(
+    SYSTOL >= 140 | DIASTOL >= 90 ~ 1,
+    TRUE ~ 0
+  ))) %>%
+  filter(
+    AGEC >= 18, 
+    HYPBC == 5,
+    SABDYMS != 4
+    ) %>%
+  select(ABSPID, 
+         SOCIAL, AGEC, SEX, BMISC,
+         SYSTOL, DIASTOL, 
+         POTAST, SODIUMT,
+         FIBRET, FIBRETP, FIBRPER,
+         CHOPER,
+         Hypertension)
+
+summary(Data1)
+```
+
+```{r}
+Data2 <- bsp_bcn_bhh %>%
+  select(
+    ABSPID, AGEC, SEX, BMISC,SYSTOL, DIASTOL,
+    POTAST1, POTAST2, 
+    SODIUMT1, SODIUMT2,
+    ENERGYT1, ENERGYT2, 
+    ENRGYT1, ENRGYT2, 
+    FIBRET1, FIBREF1, SABDYMS,  
+    FIBRET2, FIBREF2,
+    ICD10ME, SF2SA1DB,
+    DURACSF, FIBRPER1, FIBRPER2,
+    CHOPER1, CHOPER2,
+    CHOWSAT1, CHOWSAT2,
+    CHOWOAT1, CHOWOAT2
+  ) %>%
+  rename(SOCIAL = SF2SA1DB) %>%
+  mutate(
+    ICD10ME = as.factor(ICD10ME),
+    SEX = as.factor(SEX),
+    SOCIAL = as.factor(SOCIAL),
+    SABDYMS = as.factor(SABDYMS),
+    BMISC = na_if(na_if(BMISC, 99), 98),
+    SYSTOL = na_if(na_if(na_if(SYSTOL,0),998),999),
+    DIASTOL = na_if(na_if(na_if(DIASTOL,0),998),999),
+    POTAST = (POTAST1 + POTAST2) / 2, 
+    SODIUMT = (SODIUMT1 + SODIUMT2) / 2,
+    ENERGYT = (ENERGYT1 + ENERGYT2) / 2,
+    ENRGYT = (ENRGYT1 + ENRGYT2) / 2,
+    FIBRET = (FIBRET1 + FIBRET2) / 2,
+    FIBRPER = (FIBRPER1 + FIBRPER2)/2,
+    CHOPER = (CHOPER1 + CHOPER2) / 2
+    ) %>%
+  mutate(
+    FIBRETP = (ENERGYT - ENRGYT) / ENERGYT * 100,
+    Hypertension = as.factor(case_when(
+    SYSTOL >= 140 | DIASTOL >= 90 ~ 1,
+    TRUE ~ 0))) %>%
+  filter(
+    AGEC >= 18, 
+    !ICD10ME %in% c(7, 20),
+    SABDYMS != 4) %>%
+  select(ABSPID, SOCIAL, AGEC, SEX, BMISC,
+         SYSTOL, DIASTOL, 
+         POTAST, SODIUMT,
+         FIBRET, FIBRETP, FIBRPER,CHOPER,
+         Hypertension)
+
+summary(Data2)
+```
+
+```{r}
+FibreData <- bind_rows(Data1,Data2)
+summary(FibreData)
+save(FibreData, file = "FibreData.RData")
+
+FibreDataNon <- Data1
+save(FibreDataNon, file ="FibreDataNon.RData")
+
+FibreDataInd <- Data2
+save(FibreDataInd, file ="FibreDataInd.RData")
+```
