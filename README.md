@@ -1,5 +1,13 @@
 # Carbohydrate Intake and Diet Quality Analysis
 
+## Repository Structure
+- `data/`: cleaned and derived datasets (raw files retained for reference)
+- `cleaning/`: data preprocessing and variable construction
+- `eda/`: exploratory and descriptive statistical analysis
+- `modeling/`: statistical modelling and prediction
+- `results/`: final analysis outputs and reporting
+- `supplementary/`: additional analyses and materials
+
 ## Project Background
 This project was completed as part of an interdisciplinary group coursework for  **NUTM3888 / STAT3888 – Australian Health Survey Data Analysis**  at The University of Sydney.
 
