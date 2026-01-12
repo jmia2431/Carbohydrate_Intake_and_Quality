@@ -19,6 +19,11 @@ STAT3888 students were responsible for translating nutrition research questions 
   - Dietary intake (carbohydrates, dietary fibre)
   - Blood pressure (systolic and diastolic)
   - Demographic and lifestyle factors (age, BMI, gender, alcohol consumption)
+This project uses datasets derived from the Australian Health Survey. The raw survey files (stored under `ZipAllFiles/`) were not used directly for analysis. Instead, the analysis was conducted on cleaned and processed datasets (`.RData`), which were created through data cleaning, exclusion, and variable construction steps.
+
+These analysis-ready datasets include dietary intake variables (e.g. carbohydrate
+and dietary fibre intake), blood pressure outcomes, and relevant demographic and
+lifestyle factors.
 
 ## Methodology
 The analysis focused on statistical modelling and interpretability:
